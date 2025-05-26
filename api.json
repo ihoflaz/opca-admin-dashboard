@@ -1,0 +1,1001 @@
+{
+    "info": {
+      "_postman_id": "b8e2e3a4-6f5c-4e7d-8a9b-2c3d4e5f6a7b",
+      "name": "OpCa API - Kapsamlı Dokümantasyon",
+      "description": "OpCa Veteriner Tanı Uygulaması API'si - Tüm Detaylarla\n\n## Genel Özellikler\n\n### Rate Limiting (İstek Sınırlama)\nAPI istekleri, sunucu performansını korumak ve güvenliği artırmak için sınırlandırılmıştır:\n\n- **Auth İstekleri**: IP başına 15 dakikada maksimum 10 istek (/api/auth/ endpoint'leri)\n- **Dosya Yükleme**: IP başına dakikada maksimum 10 istek (/api/upload/ ve /api/analysis/mobile/ endpoint'leri)\n- **Genel API İstekleri**: IP başına dakikada maksimum 60 istek (diğer tüm endpoint'ler)\n\nRate limit aşıldığında, API \"429 Too Many Requests\" hata kodu ile yanıt verecektir.\n\n### Önbellekleme (Caching)\nPerformansı artırmak için bazı endpoint'ler önbellekleme mekanizması içerir:\n\n- **Analiz Sonuçları**: Tekrarlanan analiz detayı istekleri 5 dakika önbelleğe alınır\n- **Analiz Geçmişi**: Geçmiş listeleri 2 dakika önbelleğe alınır\n\n### Offline Mod Senkronizasyonu\nMobil uygulama offline modda çalışabilir ve analiz sonuçlarını yerel olarak saklayabilir:\n\n- Tekli analiz sonuçları: `/api/analysis/mobile/parasite` veya `/api/analysis/mobile/mnist` endpoint'leri aracılığıyla gönderilebilir\n- Toplu analiz sonuçları: Çevrimdışı modda biriken çoklu analiz sonuçları, internet bağlantısı sağlandığında `/api/analysis/batch-upload` endpoint'i aracılığıyla tek seferde gönderilebilir\n\n### Hata Yönetimi\nTüm endpoint'ler tutarlı hata formatı kullanır:\n\n```json\n{\n  \"success\": false,\n  \"message\": \"Hata açıklaması\",\n  \"errors\": [\n    {\n      \"field\": \"alan_adı\",\n      \"message\": \"Alan spesifik hata mesajı\"\n    }\n  ]\n}\n```\n\n### Kimlik Doğrulama\nKorumalı endpoint'ler için Authorization header'ında Bearer token gönderilmelidir:\n\n```\nAuthorization: Bearer <access_token>\n```",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+      {
+        "name": "1. Auth",
+        "description": "Kimlik doğrulama işlemleri",
+        "item": [
+          {
+            "name": "Kayıt Ol",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"name\": \"Test Kullanıcı\",\n    \"email\": \"test@example.com\",\n    \"password\": \"Test1234!\",\n    \"role\": \"user\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/auth/register",
+                "host": ["{{base_url}}"],
+                "path": ["api", "auth", "register"]
+              },
+              "description": "Yeni kullanıcı oluşturma\n\n### İstek Gövdesi\n- `name` (string, zorunlu): Kullanıcının adı ve soyadı (3-50 karakter)\n- `email` (string, zorunlu): Geçerli e-posta adresi\n- `password` (string, zorunlu): En az 8 karakter, büyük harf, küçük harf ve rakam içermeli\n- `role` (string, opsiyonel): Kullanıcı rolü (user, veterinarian, admin - varsayılan: user)\n\n### Başarılı Yanıt (201)\n```json\n{\n  \"success\": true,\n  \"data\": {\n    \"user\": {\n      \"id\": \"64f8a1b2c3d4e5f6a7b8c9d0\",\n      \"name\": \"Test Kullanıcı\",\n      \"email\": \"test@example.com\",\n      \"role\": \"user\"\n    },\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**400 - Validation Hatası**\n```json\n{\n  \"success\": false,\n  \"errors\": [\n    {\n      \"field\": \"email\",\n      \"message\": \"Geçerli bir e-posta adresi giriniz\"\n    },\n    {\n      \"field\": \"password\",\n      \"message\": \"Şifre en az bir büyük harf, bir küçük harf ve bir rakam içermelidir\"\n    }\n  ]\n}\n```\n\n**400 - E-posta Zaten Kullanımda**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu email zaten kullanılıyor. Lütfen başka bir email deneyin.\"\n}\n```\n\n**429 - Rate Limit**\n```json\n{\n  \"success\": false,\n  \"message\": \"Çok fazla istek gönderildi, lütfen 15 dakika sonra tekrar deneyin.\"\n}\n```\n\n### Notlar\n- Rate limit: 15 dakikada maksimum 10 istek\n- Tekrarlanan başarısız denemeler geçici olarak engellenebilir\n- Token geçerlilik süresi: 1 saat\n- Refresh token geçerlilik süresi: 7 gün"
+            }
+          },
+          {
+            "name": "Giriş Yap",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var jsonData = JSON.parse(responseBody);",
+                    "if (jsonData.success && jsonData.data) {",
+                    "  pm.environment.set(\"access_token\", jsonData.data.token);",
+                    "  pm.environment.set(\"refresh_token\", jsonData.data.refreshToken);",
+                    "}"
+                  ]
+                }
+              }
+            ],
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Test1234!\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/auth/login",
+                "host": ["{{base_url}}"],
+                "path": ["api", "auth", "login"]
+              },
+              "description": "Kullanıcı girişi\n\n### İstek Gövdesi\n- `email` (string, zorunlu): Kayıtlı e-posta adresi\n- `password` (string, zorunlu): Kullanıcı şifresi\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"data\": {\n    \"user\": {\n      \"id\": \"64f8a1b2c3d4e5f6a7b8c9d0\",\n      \"name\": \"Test Kullanıcı\",\n      \"email\": \"test@example.com\",\n      \"role\": \"user\"\n    },\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY0ZjhhMWIyYzNkNGU1ZjZhN2I4YzlkMCIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNjk0MDk2NDAwLCJleHAiOjE2OTQxMDAwMDB9.signature\",\n    \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY0ZjhhMWIyYzNkNGU1ZjZhN2I4YzlkMCIsImlhdCI6MTY5NDA5NjQwMCwiZXhwIjoxNjk0NzAxMjAwfQ.signature\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**400 - Validation Hatası**\n```json\n{\n  \"success\": false,\n  \"errors\": [\n    {\n      \"field\": \"email\",\n      \"message\": \"Geçerli bir e-posta adresi giriniz\"\n    },\n    {\n      \"field\": \"password\",\n      \"message\": \"Şifre gereklidir\"\n    }\n  ]\n}\n```\n\n**401 - Geçersiz Kimlik Bilgileri**\n```json\n{\n  \"success\": false,\n  \"message\": \"Geçersiz e-posta veya şifre\"\n}\n```\n\n**429 - Rate Limit**\n```json\n{\n  \"success\": false,\n  \"message\": \"Çok fazla istek gönderildi, lütfen 15 dakika sonra tekrar deneyin.\"\n}\n```\n\n### Notlar\n- `token`: 1 saat geçerli JWT access token\n- `refreshToken`: 7 gün geçerli yenileme token'ı\n- Rate limit: 15 dakikada maksimum 10 istek\n- Tekrarlanan başarısız denemeler geçici olarak engellenebilir"
+            }
+          },
+          {
+            "name": "Token Yenile",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var jsonData = JSON.parse(responseBody);",
+                    "if (jsonData.success && jsonData.data) {",
+                    "  pm.environment.set(\"access_token\", jsonData.data.token);",
+                    "}"
+                  ]
+                }
+              }
+            ],
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"refreshToken\": \"{{refresh_token}}\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/auth/refresh-token",
+                "host": ["{{base_url}}"],
+                "path": ["api", "auth", "refresh-token"]
+              },
+              "description": "Refresh token ile yeni access token alma\n\n### İstek Gövdesi\n- `refreshToken` (string, zorunlu): Geçerli refresh token\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"data\": {\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY0ZjhhMWIyYzNkNGU1ZjZhN2I4YzlkMCIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNjk0MDk2NDAwLCJleHAiOjE2OTQxMDAwMDB9.new_signature\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**400 - Eksik Token**\n```json\n{\n  \"success\": false,\n  \"message\": \"Refresh token gereklidir\"\n}\n```\n\n**401 - Geçersiz Token**\n```json\n{\n  \"success\": false,\n  \"message\": \"Geçersiz veya süresi dolmuş token\"\n}\n```\n\n**429 - Rate Limit**\n```json\n{\n  \"success\": false,\n  \"message\": \"Çok fazla istek gönderildi, lütfen 15 dakika sonra tekrar deneyin.\"\n}\n```\n\n### Notlar\n- Rate limit: 15 dakikada maksimum 10 istek\n- Yeni token 1 saat geçerli\n- Geçersiz veya süresi dolmuş refresh token ile yapılan istekler 401 hata kodu ile yanıtlanır"
+            }
+          },
+          {
+            "name": "Mevcut Kullanıcı Bilgisi",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/auth/me",
+                "host": ["{{base_url}}"],
+                "path": ["api", "auth", "me"]
+              },
+              "description": "Mevcut kullanıcının bilgilerini getir\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"data\": {\n    \"user\": {\n      \"id\": \"64f8a1b2c3d4e5f6a7b8c9d0\",\n      \"name\": \"Test Kullanıcı\",\n      \"email\": \"test@example.com\",\n      \"role\": \"user\",\n      \"createdAt\": \"2023-09-07T10:30:00.000Z\"\n    }\n  }\n}\n```\n\n### Hata Yanıtları\n\n**401 - Token Gerekli**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu işlem için giriş yapmanız gerekiyor\"\n}\n```\n\n**401 - Geçersiz Token**\n```json\n{\n  \"success\": false,\n  \"message\": \"Geçersiz token. Lütfen tekrar giriş yapın.\"\n}\n```\n\n**401 - Token Süresi Dolmuş**\n```json\n{\n  \"success\": false,\n  \"message\": \"Token süresi doldu. Lütfen tekrar giriş yapın.\"\n}\n```\n\n### Notlar\n- Kimlik doğrulama gerekli\n- Rate limit: 1 dakikada maksimum 60 istek"
+            }
+          }
+        ]
+      },
+      {
+        "name": "2. Parazit İşlemleri",
+        "description": "Parazit bilgisi işlemleri",
+        "item": [
+          {
+            "name": "Tüm Parazitleri Getir",
+            "request": {
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/parasites",
+                "host": ["{{base_url}}"],
+                "path": ["api", "parasites"]
+              },
+              "description": "Tüm parazit bilgilerini getir\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"count\": 3,\n  \"parasites\": [\n    {\n      \"_id\": \"64f8a1b2c3d4e5f6a7b8c9d1\",\n      \"type\": \"Neosporosis\",\n      \"name\": \"Neospora caninum\",\n      \"description\": \"Neospora caninum, tek hücreli bir parazittir ve sığırlarda yavru atmaya sebep olur.\",\n      \"treatment\": \"Spesifik bir tedavi bulunmamaktadır, ancak bazı ilaçlar kullanılabilir.\",\n      \"preventionMeasures\": [\n        \"Köpeklerle teması sınırlandırma\",\n        \"Yem ve su kaynaklarını koruma\",\n        \"Ölü doğan buzağıları uygun şekilde imha etme\"\n      ],\n      \"imageUrls\": [\n        \"https://opca-bucket.s3.amazonaws.com/parasites/neospora1.jpg\",\n        \"https://opca-bucket.s3.amazonaws.com/parasites/neospora2.jpg\"\n      ]\n    },\n    {\n      \"_id\": \"64f8a1b2c3d4e5f6a7b8c9d2\",\n      \"type\": \"Echinococcosis\",\n      \"name\": \"Echinococcus granulosus\",\n      \"description\": \"Kist hidatik hastalığına neden olan parazit türüdür.\",\n      \"treatment\": \"Cerrahi müdahale ve antiparaziter ilaçlar kullanılır.\",\n      \"preventionMeasures\": [\n        \"Köpeklerin düzenli parazit tedavisi\",\n        \"Hijyen kurallarına uyma\",\n        \"Çiğ et tüketiminden kaçınma\"\n      ],\n      \"imageUrls\": [\n        \"https://opca-bucket.s3.amazonaws.com/parasites/echino1.jpg\"\n      ]\n    },\n    {\n      \"_id\": \"64f8a1b2c3d4e5f6a7b8c9d3\",\n      \"type\": \"Coenurosis\",\n      \"name\": \"Taenia multiceps\",\n      \"description\": \"Beyin ve omurilik kistlerine neden olan parazit türüdür.\",\n      \"treatment\": \"Cerrahi müdahale gerekebilir.\",\n      \"preventionMeasures\": [\n        \"Köpeklerin tedavisi\",\n        \"Hijyen önlemleri\",\n        \"Enfekte hayvanların izolasyonu\"\n      ],\n      \"imageUrls\": [\n        \"https://opca-bucket.s3.amazonaws.com/parasites/coenurus1.jpg\"\n      ]\n    }\n  ]\n}\n```\n\n### Hata Yanıtları\n\n**500 - Sunucu Hatası**\n```json\n{\n  \"success\": false,\n  \"message\": \"Sunucu hatası\"\n}\n```\n\n### Notlar\n- Kimlik doğrulama gerekli değil\n- Rate limit: 1 dakikada maksimum 60 istek"
+            }
+          },
+          {
+            "name": "Parazit Detayı",
+            "request": {
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/parasites/Neosporosis",
+                "host": ["{{base_url}}"],
+                "path": ["api", "parasites", "Neosporosis"]
+              },
+              "description": "Belirli bir parazit türünün detaylarını getir\n\n### URL Parametreleri\n- `type` (string): Parazit tipi (Neosporosis, Echinococcosis, Coenurosis)\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"parasite\": {\n    \"_id\": \"64f8a1b2c3d4e5f6a7b8c9d1\",\n    \"type\": \"Neosporosis\",\n    \"name\": \"Neospora caninum\",\n    \"description\": \"Neospora caninum, tek hücreli bir parazittir ve sığırlarda yavru atmaya sebep olur. Bu parazit, köpekler ve diğer kanidler tarafından taşınır ve sığırlara bulaşır. Enfeksiyon genellikle anne hayvanın gebelik döneminde yavruya geçer ve abort (yavru atma) ile sonuçlanır.\",\n    \"treatment\": \"Neosporosis için spesifik bir tedavi bulunmamaktadır. Ancak bazı antiparaziter ilaçlar semptomları hafifletebilir. Tedavi genellikle destekleyici bakım ve sekonder enfeksiyonların önlenmesine odaklanır.\",\n    \"preventionMeasures\": [\n      \"Köpeklerle teması sınırlandırma\",\n      \"Yem ve su kaynaklarını koruma\",\n      \"Ölü doğan buzağıları uygun şekilde imha etme\",\n      \"Çiftlik hijyenini sağlama\",\n      \"Düzenli veteriner kontrolü\"\n    ],\n    \"imageUrls\": [\n      \"https://opca-bucket.s3.amazonaws.com/parasites/neospora1.jpg\",\n      \"https://opca-bucket.s3.amazonaws.com/parasites/neospora2.jpg\"\n    ],\n    \"examples\": [\n      {\n        \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/parasites/examples/neospora_example1.jpg\",\n        \"description\": \"Mikroskop altında Neospora caninum kisti\"\n      },\n      {\n        \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/parasites/examples/neospora_example2.jpg\",\n        \"description\": \"Doku kesitinde parazit yapıları\"\n      }\n    ],\n    \"createdAt\": \"2023-09-07T10:30:00.000Z\",\n    \"updatedAt\": \"2023-09-07T10:30:00.000Z\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**404 - Parazit Bulunamadı**\n```json\n{\n  \"success\": false,\n  \"message\": \"Parazit bulunamadı\"\n}\n```\n\n**500 - Sunucu Hatası**\n```json\n{\n  \"success\": false,\n  \"message\": \"Sunucu hatası\"\n}\n```\n\n### Notlar\n- Kimlik doğrulama gerekli değil\n- Rate limit: 1 dakikada maksimum 60 istek\n- Desteklenen parazit tipleri: Neosporosis, Echinococcosis, Coenurosis"
+            }
+          },
+          {
+            "name": "Parazit Ekle (Admin)",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"type\": \"Neosporosis\",\n    \"name\": \"Neospora caninum\",\n    \"description\": \"Neospora caninum, tek hücreli bir parazittir ve sığırlarda yavru atmaya sebep olur.\",\n    \"treatment\": \"Spesifik bir tedavi bulunmamaktadır, ancak bazı ilaçlar kullanılabilir.\",\n    \"preventionMeasures\": [\n        \"Köpeklerle teması sınırlandırma\",\n        \"Yem ve su kaynaklarını koruma\",\n        \"Ölü doğan buzağıları uygun şekilde imha etme\"\n    ],\n    \"imageUrls\": [\n        \"https://opca-bucket.s3.amazonaws.com/parasites/neospora1.jpg\",\n        \"https://opca-bucket.s3.amazonaws.com/parasites/neospora2.jpg\"\n    ],\n    \"examples\": [\n        {\n            \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/parasites/examples/neospora_example1.jpg\",\n            \"description\": \"Mikroskop altında Neospora caninum kisti\"\n        }\n    ]\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/parasites",
+                "host": ["{{base_url}}"],
+                "path": ["api", "parasites"]
+              },
+              "description": "Yeni parazit bilgisi ekle (Admin rolü gerekli)\n\n### İstek Gövdesi\n- `type` (string, zorunlu): Parazit tipi (benzersiz olmalı)\n- `name` (string, zorunlu): Parazit bilimsel adı\n- `description` (string, zorunlu): Parazit açıklaması\n- `treatment` (string, zorunlu): Tedavi bilgileri\n- `preventionMeasures` (array, zorunlu): Önleme yöntemleri\n- `imageUrls` (array, opsiyonel): Parazit görüntü URL'leri\n- `examples` (array, opsiyonel): Örnek görüntüler ve açıklamaları\n\n### Başarılı Yanıt (201)\n```json\n{\n  \"success\": true,\n  \"message\": \"Parazit bilgisi başarıyla eklendi\",\n  \"parasite\": {\n    \"_id\": \"64f8a1b2c3d4e5f6a7b8c9d4\",\n    \"type\": \"Neosporosis\",\n    \"name\": \"Neospora caninum\",\n    \"description\": \"Neospora caninum, tek hücreli bir parazittir ve sığırlarda yavru atmaya sebep olur.\",\n    \"treatment\": \"Spesifik bir tedavi bulunmamaktadır, ancak bazı ilaçlar kullanılabilir.\",\n    \"preventionMeasures\": [\n      \"Köpeklerle teması sınırlandırma\",\n      \"Yem ve su kaynaklarını koruma\",\n      \"Ölü doğan buzağıları uygun şekilde imha etme\"\n    ],\n    \"imageUrls\": [\n      \"https://opca-bucket.s3.amazonaws.com/parasites/neospora1.jpg\",\n      \"https://opca-bucket.s3.amazonaws.com/parasites/neospora2.jpg\"\n    ],\n    \"examples\": [\n      {\n        \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/parasites/examples/neospora_example1.jpg\",\n        \"description\": \"Mikroskop altında Neospora caninum kisti\"\n      }\n    ],\n    \"createdAt\": \"2023-09-07T12:00:00.000Z\",\n    \"updatedAt\": \"2023-09-07T12:00:00.000Z\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**400 - Parazit Zaten Mevcut**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu tipte bir parazit zaten mevcut\"\n}\n```\n\n**400 - Validation Hatası**\n```json\n{\n  \"success\": false,\n  \"message\": \"type alanı gereklidir, name alanı gereklidir\"\n}\n```\n\n**401 - Kimlik Doğrulama Gerekli**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu işlem için giriş yapmanız gerekiyor\"\n}\n```\n\n**403 - Yetki Yetersiz**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu işlem için yetkiniz bulunmamaktadır\"\n}\n```\n\n### Notlar\n- Sadece admin rolündeki kullanıcılar erişebilir\n- Kimlik doğrulama gerekli\n- Rate limit: 1 dakikada maksimum 60 istek"
+            }
+          },
+          {
+            "name": "Parazit Güncelle (Admin)",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "PUT",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"name\": \"Neospora caninum (Güncellenmiş)\",\n    \"description\": \"Güncellenmiş açıklama...\",\n    \"treatment\": \"Güncellenmiş tedavi bilgileri...\",\n    \"preventionMeasures\": [\n        \"Güncellenmiş önlem 1\",\n        \"Güncellenmiş önlem 2\"\n    ]\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/parasites/Neosporosis",
+                "host": ["{{base_url}}"],
+                "path": ["api", "parasites", "Neosporosis"]
+              },
+              "description": "Mevcut parazit bilgisini güncelle (Admin rolü gerekli)\n\n### URL Parametreleri\n- `type` (string): Güncellenecek parazit tipi\n\n### İstek Gövdesi\nGüncellenecek alanlar (tümü opsiyonel):\n- `name` (string): Parazit bilimsel adı\n- `description` (string): Parazit açıklaması\n- `treatment` (string): Tedavi bilgileri\n- `preventionMeasures` (array): Önleme yöntemleri\n- `imageUrls` (array): Parazit görüntü URL'leri\n- `examples` (array): Örnek görüntüler ve açıklamaları\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"message\": \"Parazit bilgisi başarıyla güncellendi\",\n  \"parasite\": {\n    \"_id\": \"64f8a1b2c3d4e5f6a7b8c9d1\",\n    \"type\": \"Neosporosis\",\n    \"name\": \"Neospora caninum (Güncellenmiş)\",\n    \"description\": \"Güncellenmiş açıklama...\",\n    \"treatment\": \"Güncellenmiş tedavi bilgileri...\",\n    \"preventionMeasures\": [\n      \"Güncellenmiş önlem 1\",\n      \"Güncellenmiş önlem 2\"\n    ],\n    \"imageUrls\": [\n      \"https://opca-bucket.s3.amazonaws.com/parasites/neospora1.jpg\"\n    ],\n    \"examples\": [],\n    \"createdAt\": \"2023-09-07T10:30:00.000Z\",\n    \"updatedAt\": \"2023-09-07T14:30:00.000Z\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**404 - Parazit Bulunamadı**\n```json\n{\n  \"success\": false,\n  \"message\": \"Parazit bulunamadı\"\n}\n```\n\n**401 - Kimlik Doğrulama Gerekli**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu işlem için giriş yapmanız gerekiyor\"\n}\n```\n\n**403 - Erişim Yetkisi Yok**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu işlem için yetkiniz bulunmamaktadır\"\n}\n```\n\n### Notlar\n- Sadece admin rolündeki kullanıcılar erişebilir\n- Kimlik doğrulama gerekli\n- Rate limit: 1 dakikada maksimum 60 istek"
+            }
+          }
+        ]
+      },
+      {
+        "name": "3. Rakam İşlemleri",
+        "description": "MNIST rakam bilgisi işlemleri",
+        "item": [
+          {
+            "name": "Tüm Rakamları Getir",
+            "request": {
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/digits",
+                "host": ["{{base_url}}"],
+                "path": ["api", "digits"]
+              },
+              "description": "Tüm rakam bilgilerini getir\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"count\": 10,\n  \"digits\": [\n    {\n      \"_id\": \"64f8a1b2c3d4e5f6a7b8c9e1\",\n      \"value\": 0,\n      \"description\": \"Sıfır rakamı\",\n      \"examples\": [\n        {\n          \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/digits/examples/digit_0_example1.jpg\",\n          \"description\": \"El yazısı 0 örneği\"\n        }\n      ]\n    },\n    {\n      \"_id\": \"64f8a1b2c3d4e5f6a7b8c9e2\",\n      \"value\": 1,\n      \"description\": \"Bir rakamı\",\n      \"examples\": [\n        {\n          \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/digits/examples/digit_1_example1.jpg\",\n          \"description\": \"El yazısı 1 örneği\"\n        }\n      ]\n    },\n    {\n      \"_id\": \"64f8a1b2c3d4e5f6a7b8c9e3\",\n      \"value\": 2,\n      \"description\": \"İki rakamı\",\n      \"examples\": []\n    }\n  ]\n}\n```\n\n### Hata Yanıtları\n\n**500 - Sunucu Hatası**\n```json\n{\n  \"success\": false,\n  \"message\": \"Sunucu hatası\"\n}\n```\n\n### Notlar\n- Kimlik doğrulama gerekli değil\n- Rate limit: 1 dakikada maksimum 60 istek"
+            }
+          },
+          {
+            "name": "Rakam Detayı",
+            "request": {
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/digits/5",
+                "host": ["{{base_url}}"],
+                "path": ["api", "digits", "5"]
+              },
+              "description": "Belirli bir rakamın detaylarını getir\n\n### URL Parametreleri\n- `value` (number): Rakam değeri (0-9 arası)\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"digit\": {\n    \"_id\": \"64f8a1b2c3d4e5f6a7b8c9e6\",\n    \"value\": 5,\n    \"description\": \"Beş rakamı - MNIST veri setinde sıkça karşılaşılan el yazısı rakam örneklerinden biridir. Genellikle üst kısmında yatay çizgi ve alt kısmında kavisli yapı bulunur.\",\n    \"examples\": [\n      {\n        \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/digits/examples/digit_5_example1.jpg\",\n        \"description\": \"El yazısı 5 örneği - standart yazım\"\n      },\n      {\n        \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/digits/examples/digit_5_example2.jpg\",\n        \"description\": \"El yazısı 5 örneği - kavisli yazım\"\n      },\n      {\n        \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/digits/examples/digit_5_example3.jpg\",\n        \"description\": \"El yazısı 5 örneği - kalın yazım\"\n      }\n    ],\n    \"createdAt\": \"2023-09-07T10:30:00.000Z\",\n    \"updatedAt\": \"2023-09-07T10:30:00.000Z\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**404 - Rakam Bulunamadı**\n```json\n{\n  \"success\": false,\n  \"message\": \"Rakam bulunamadı\"\n}\n```\n\n**400 - Geçersiz Rakam Değeri**\n```json\n{\n  \"success\": false,\n  \"message\": \"Geçersiz value: abc\"\n}\n```\n\n**500 - Sunucu Hatası**\n```json\n{\n  \"success\": false,\n  \"message\": \"Sunucu hatası\"\n}\n```\n\n### Notlar\n- Kimlik doğrulama gerekli değil\n- Rate limit: 1 dakikada maksimum 60 istek\n- Desteklenen rakam değerleri: 0-9"
+            }
+          },
+          {
+            "name": "Rakam Ekle (Admin)",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"value\": 5,\n    \"description\": \"Beş rakamı\",\n    \"examples\": [\n        {\n            \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/digits/examples/digit_5_example1.jpg\",\n            \"description\": \"El yazısı 5 örneği\"\n        }\n    ]\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/digits",
+                "host": ["{{base_url}}"],
+                "path": ["api", "digits"]
+              },
+              "description": "Yeni rakam bilgisi ekle (Admin rolü gerekli)\n\n### İstek Gövdesi\n- `value` (number, zorunlu): Rakam değeri (0-9 arası, benzersiz olmalı)\n- `description` (string, zorunlu): Rakam açıklaması\n- `examples` (array, opsiyonel): Örnek görüntüler ve açıklamaları\n\n### Başarılı Yanıt (201)\n```json\n{\n  \"success\": true,\n  \"message\": \"Rakam bilgisi başarıyla eklendi\",\n  \"digit\": {\n    \"_id\": \"64f8a1b2c3d4e5f6a7b8c9e7\",\n    \"value\": 5,\n    \"description\": \"Beş rakamı\",\n    \"examples\": [\n      {\n        \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/digits/examples/digit_5_example1.jpg\",\n        \"description\": \"El yazısı 5 örneği\"\n      }\n    ],\n    \"createdAt\": \"2023-09-07T12:00:00.000Z\",\n    \"updatedAt\": \"2023-09-07T12:00:00.000Z\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**400 - Rakam Zaten Mevcut**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu değerde bir rakam zaten mevcut\"\n}\n```\n\n**400 - Validation Hatası**\n```json\n{\n  \"success\": false,\n  \"message\": \"value alanı gereklidir, description alanı gereklidir\"\n}\n```\n\n**401 - Kimlik Doğrulama Gerekli**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu işlem için giriş yapmanız gerekiyor\"\n}\n```\n\n**403 - Yetki Yetersiz**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu işlem için yetkiniz bulunmamaktadır\"\n}\n```\n\n### Notlar\n- Sadece admin rolündeki kullanıcılar erişebilir\n- Kimlik doğrulama gerekli\n- Rate limit: 1 dakikada maksimum 60 istek"
+            }
+          }
+        ]
+      },
+      {
+        "name": "4. Dosya Yükleme",
+        "description": "Dosya yükleme işlemleri",
+        "item": [
+          {
+            "name": "Görüntü Yükle",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "POST",
+              "header": [],
+              "body": {
+                "mode": "formdata",
+                "formdata": [
+                  {
+                    "key": "image",
+                    "type": "file",
+                    "src": "/path/to/your/image.jpg"
+                  },
+                  {
+                    "key": "folder",
+                    "value": "images",
+                    "type": "text"
+                  }
+                ]
+              },
+              "url": {
+                "raw": "{{base_url}}/api/upload/image",
+                "host": ["{{base_url}}"],
+                "path": ["api", "upload", "image"]
+              },
+              "description": "Tek görüntü dosyası yükle\n\n### Desteklenen Formatlar\n- JPEG/JPG\n- PNG\n\n### Notlar\n- Maksimum dosya boyutu: 10MB\n- Rate limit: 1 dakikada maksimum 10 istek\n- Yüklenen görüntüler otomatik olarak optimize edilir\n- Thumbnail otomatik olarak oluşturulur"
+            }
+          }
+        ]
+      },
+      {
+        "name": "5. Analiz",
+        "description": "Analiz sonuçlarını saklama ve görüntüleme işlemleri",
+        "item": [
+          {
+            "name": "Parazit Analiz Sonucu Gönder",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "POST",
+              "header": [],
+              "body": {
+                "mode": "formdata",
+                "formdata": [
+                  {
+                    "key": "image",
+                    "type": "file",
+                    "src": "/path/to/your/parasite_image.jpg"
+                  },
+                  {
+                    "key": "results",
+                    "value": "[{\"type\":\"Neosporosis\",\"confidence\":0.75},{\"type\":\"Echinococcosis\",\"confidence\":0.15},{\"type\":\"Coenurosis\",\"confidence\":0.10}]",
+                    "type": "text"
+                  },
+                  {
+                    "key": "processingTimeMs",
+                    "value": "350",
+                    "type": "text"
+                  },
+                  {
+                    "key": "location",
+                    "value": "Ankara, Türkiye",
+                    "type": "text"
+                  },
+                  {
+                    "key": "notes",
+                    "value": "Cihazda işlenmiş parazit analizi",
+                    "type": "text"
+                  },
+                  {
+                    "key": "modelName",
+                    "value": "parasite-mobilenet",
+                    "type": "text"
+                  },
+                  {
+                    "key": "modelVersion",
+                    "value": "1.0.0",
+                    "type": "text"
+                  },
+                  {
+                    "key": "deviceInfo",
+                    "value": "Android 13 / Samsung Galaxy S22",
+                    "type": "text"
+                  }
+                ]
+              },
+              "url": {
+                "raw": "{{base_url}}/api/analysis/mobile/parasite",
+                "host": ["{{base_url}}"],
+                "path": ["api", "analysis", "mobile", "parasite"]
+              },
+              "description": "Cihazda işlenmiş parazit analiz sonucunu sunucuya gönder"
+            }
+          },
+          {
+            "name": "MNIST Analiz Sonucu Gönder",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "POST",
+              "header": [],
+              "body": {
+                "mode": "formdata",
+                "formdata": [
+                  {
+                    "key": "image",
+                    "type": "file",
+                    "src": "/path/to/your/digit_image.jpg"
+                  },
+                  {
+                    "key": "results",
+                    "value": "[{\"value\":5,\"confidence\":0.85},{\"value\":3,\"confidence\":0.10},{\"value\":8,\"confidence\":0.05}]",
+                    "type": "text"
+                  },
+                  {
+                    "key": "processingTimeMs",
+                    "value": "180",
+                    "type": "text"
+                  },
+                  {
+                    "key": "notes",
+                    "value": "Cihazda işlenmiş MNIST analizi",
+                    "type": "text"
+                  },
+                  {
+                    "key": "modelName",
+                    "value": "mnist-convnet",
+                    "type": "text"
+                  },
+                  {
+                    "key": "modelVersion",
+                    "value": "1.0.0",
+                    "type": "text"
+                  },
+                  {
+                    "key": "deviceInfo",
+                    "value": "iOS 16.5 / iPhone 14 Pro",
+                    "type": "text"
+                  }
+                ]
+              },
+              "url": {
+                "raw": "{{base_url}}/api/analysis/mobile/mnist",
+                "host": ["{{base_url}}"],
+                "path": ["api", "analysis", "mobile", "mnist"]
+              },
+              "description": "Cihazda işlenmiş MNIST analiz sonucunu sunucuya gönder"
+            }
+          },
+          {
+            "name": "Toplu Analiz Sonuçları Gönder",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"analyses\": [\n    {\n      \"localId\": \"local-uuid-1\",\n      \"type\": \"Parasite\",\n      \"imageBase64\": \"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=\",\n      \"results\": [\n        {\"type\":\"Neosporosis\",\"confidence\":0.75},\n        {\"type\":\"Echinococcosis\",\"confidence\":0.15},\n        {\"type\":\"Coenurosis\",\"confidence\":0.10}\n      ],\n      \"processingTimeMs\": 350,\n      \"location\": \"Ankara, Türkiye\",\n      \"notes\": \"Offline modda kaydedilmiş parazit analizi\",\n      \"modelName\": \"parasite-mobilenet\",\n      \"modelVersion\": \"1.0.0\",\n      \"deviceInfo\": \"Android 13 / Samsung Galaxy S22\",\n      \"createdAt\": \"2023-08-15T14:30:45.000Z\"\n    },\n    {\n      \"localId\": \"local-uuid-2\",\n      \"type\": \"MNIST\",\n      \"imageBase64\": \"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k=\",\n      \"results\": [\n        {\"value\":5,\"confidence\":0.85},\n        {\"value\":3,\"confidence\":0.10},\n        {\"value\":8,\"confidence\":0.05}\n      ],\n      \"processingTimeMs\": 180,\n      \"notes\": \"Offline modda kaydedilmiş MNIST analizi\",\n      \"modelName\": \"mnist-convnet\",\n      \"modelVersion\": \"1.0.0\",\n      \"deviceInfo\": \"iOS 16.5 / iPhone 14 Pro\",\n      \"createdAt\": \"2023-08-15T15:45:30.000Z\"\n    }\n  ]\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/analysis/batch-upload",
+                "host": ["{{base_url}}"],
+                "path": ["api", "analysis", "batch-upload"]
+              },
+              "description": "Offline modda biriken analiz sonuçlarını toplu olarak sunucuya gönder\n\n### Yanıt formatı\n\n```json\n{\n  \"success\": true,\n  \"results\": [\n    {\"localId\": \"local-uuid-1\", \"serverId\": \"server-id-1\", \"status\": \"success\"},\n    {\"localId\": \"local-uuid-2\", \"status\": \"error\", \"message\": \"Validation failed\"}\n  ],\n  \"successCount\": 1,\n  \"errorCount\": 1,\n  \"totalCount\": 2\n}\n```\n\n### Notlar\n- `localId`: Mobil uygulamada oluşturulan benzersiz ID\n- `serverId`: Sunucuda oluşturulan analiz ID (başarılı kayıtlar için)\n- Rate limit: 1 dakikada maksimum 10 istek\n- Dosya boyutu: Toplam istek boyutu 100MB'ı aşmamalıdır\n- Her görüntü ayrı ayrı işlenir, bazıları başarılı bazıları başarısız olabilir"
+            }
+          },
+          {
+            "name": "Analiz Detayı",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/analysis/results/64f8a1b2c3d4e5f6a7b8c9f1",
+                "host": ["{{base_url}}"],
+                "path": ["api", "analysis", "results", "64f8a1b2c3d4e5f6a7b8c9f1"]
+              },
+              "description": "Belirli bir analiz sonucunu getir\n\n### Notlar\n- Bu endpoint önbellekleme kullanır (5 dakika)\n- Aynı analiz ID'si için tekrarlanan istekler önbellekten sunulur\n- Rate limit: 1 dakikada maksimum 60 istek"
+            }
+          },
+          {
+            "name": "Analiz Geçmişi",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/analysis/history?page=1&limit=10&type=Parasite&processedOnMobile=true&startDate=2023-09-01T00:00:00Z&endDate=2023-09-30T23:59:59Z",
+                "host": ["{{base_url}}"],
+                "path": ["api", "analysis", "history"],
+                "query": [
+                  {
+                    "key": "page",
+                    "value": "1"
+                  },
+                  {
+                    "key": "limit",
+                    "value": "10"
+                  },
+                  {
+                    "key": "type",
+                    "value": "Parasite"
+                  },
+                  {
+                    "key": "processedOnMobile",
+                    "value": "true"
+                  },
+                  {
+                    "key": "startDate",
+                    "value": "2023-09-01T00:00:00Z"
+                  },
+                  {
+                    "key": "endDate",
+                    "value": "2023-09-30T23:59:59Z"
+                  }
+                ]
+              },
+              "description": "Kullanıcının analiz geçmişini getir\n\n### Sorgu parametreleri\n- `page` (number, opsiyonel): Sayfa numarası (varsayılan: 1, minimum: 1)\n- `limit` (number, opsiyonel): Sayfa başına sonuç sayısı (varsayılan: 20, maksimum: 100)\n- `type` (string, opsiyonel): Analiz tipi filtresi (\"Parasite\" veya \"MNIST\")\n- `processedOnMobile` (boolean, opsiyonel): Mobil cihazda işlenmiş analizler (true/false)\n- `startDate` (string, opsiyonel): Başlangıç tarihi (ISO 8601 formatı)\n- `endDate` (string, opsiyonel): Bitiş tarihi (ISO 8601 formatı)\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"analyses\": [\n    {\n      \"_id\": \"64f8a1b2c3d4e5f6a7b8c9f1\",\n      \"analysisType\": \"Parasite\",\n      \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/analyses/original_1694096400123_parasite.jpg\",\n      \"thumbnailUrl\": \"https://opca-bucket.s3.amazonaws.com/analyses/thumb_1694096400123_parasite.jpg\",\n      \"location\": \"Ankara, Türkiye\",\n      \"notes\": \"Cihazda işlenmiş parazit analizi\",\n      \"parasiteResults\": [\n        {\n          \"type\": \"Neosporosis\",\n          \"confidence\": 0.75\n        },\n        {\n          \"type\": \"Echinococcosis\",\n          \"confidence\": 0.15\n        }\n      ],\n      \"digitResults\": [],\n      \"processingTimeMs\": 350,\n      \"processedOnMobile\": true,\n      \"modelName\": \"parasite-mobilenet\",\n      \"modelVersion\": \"1.0.0\",\n      \"deviceInfo\": \"Android 13 / Samsung Galaxy S22\",\n      \"createdAt\": \"2023-09-07T12:00:00.123Z\"\n    },\n    {\n      \"_id\": \"64f8a1b2c3d4e5f6a7b8c9f2\",\n      \"analysisType\": \"MNIST\",\n      \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/analyses/original_1694096400456_digit.jpg\",\n      \"thumbnailUrl\": \"https://opca-bucket.s3.amazonaws.com/analyses/thumb_1694096400456_digit.jpg\",\n      \"location\": null,\n      \"notes\": \"Cihazda işlenmiş MNIST analizi\",\n      \"parasiteResults\": [],\n      \"digitResults\": [\n        {\n          \"value\": 5,\n          \"confidence\": 0.85\n        },\n        {\n          \"value\": 3,\n          \"confidence\": 0.10\n        }\n      ],\n      \"processingTimeMs\": 180,\n      \"processedOnMobile\": true,\n      \"modelName\": \"mnist-convnet\",\n      \"modelVersion\": \"1.0.0\",\n      \"deviceInfo\": \"iOS 16.5 / iPhone 14 Pro\",\n      \"createdAt\": \"2023-09-07T12:05:00.456Z\"\n    }\n  ],\n  \"pagination\": {\n    \"currentPage\": 1,\n    \"totalPages\": 3,\n    \"totalCount\": 25,\n    \"hasNextPage\": true,\n    \"hasPrevPage\": false,\n    \"limit\": 10\n  },\n  \"filters\": {\n    \"type\": \"Parasite\",\n    \"processedOnMobile\": true,\n    \"startDate\": \"2023-09-01T00:00:00.000Z\",\n    \"endDate\": \"2023-09-30T23:59:59.000Z\"\n  }\n}\n```\n\n### Boş Sonuç Yanıtı (200)\n```json\n{\n  \"success\": true,\n  \"analyses\": [],\n  \"pagination\": {\n    \"currentPage\": 1,\n    \"totalPages\": 0,\n    \"totalCount\": 0,\n    \"hasNextPage\": false,\n    \"hasPrevPage\": false,\n    \"limit\": 10\n  },\n  \"filters\": {}\n}\n```\n\n### Hata Yanıtları\n\n**400 - Validation Hatası**\n```json\n{\n  \"success\": false,\n  \"errors\": [\n    {\n      \"field\": \"page\",\n      \"message\": \"Sayfa numarası pozitif bir tamsayı olmalıdır\"\n    },\n    {\n      \"field\": \"limit\",\n      \"message\": \"Limit 1-100 arasında olmalıdır\"\n    },\n    {\n      \"field\": \"type\",\n      \"message\": \"Geçersiz analiz tipi\"\n    },\n    {\n      \"field\": \"startDate\",\n      \"message\": \"Geçerli bir tarih formatı gereklidir\"\n    }\n  ]\n}\n```\n\n**401 - Kimlik Doğrulama Gerekli**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu işlem için giriş yapmanız gerekiyor\"\n}\n```\n\n### Notlar\n- Kimlik doğrulama gerekli\n- Kullanıcı sadece kendi analizlerini görebilir\n- Bu endpoint önbellekleme kullanır (2 dakika)\n- Rate limit: 1 dakikada maksimum 60 istek\n- Sonuçlar oluşturulma tarihine göre azalan sırada döner\n- Tarih filtreleri ISO 8601 formatında olmalı (örn: 2023-09-01T00:00:00Z)"
+            }
+          }
+        ]
+      },
+      {
+        "name": "6. Model Versiyon Kontrolü",
+        "description": "Mobil uygulama içindeki gömülü modellerin versiyon kontrolü",
+        "item": [
+          {
+            "name": "Mevcut Model Versiyonları",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/models",
+                "host": ["{{base_url}}"],
+                "path": ["api", "models"]
+              },
+              "description": "Mevcut tüm model versiyonlarını listele (güncelleme kontrolü için)"
+            }
+          },
+          {
+            "name": "Parazit Modeli Metadata",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/models/parasite/parasite-mobilenet/1.0.0/metadata",
+                "host": ["{{base_url}}"],
+                "path": ["api", "models", "parasite", "parasite-mobilenet", "1.0.0", "metadata"]
+              },
+              "description": "Parazit modeli metadata bilgilerini getir"
+            }
+          },
+          {
+            "name": "MNIST Modeli Metadata",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/models/mnist/mnist-convnet/1.0.0/metadata",
+                "host": ["{{base_url}}"],
+                "path": ["api", "models", "mnist", "mnist-convnet", "1.0.0", "metadata"]
+              },
+              "description": "MNIST modeli metadata bilgilerini getir"
+            }
+          },
+          {
+            "name": "Parazit Modeli Güncelleme Kontrolü",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/models/parasite/parasite-mobilenet/1.0.0/check-update",
+                "host": ["{{base_url}}"],
+                "path": ["api", "models", "parasite", "parasite-mobilenet", "1.0.0", "check-update"]
+              },
+              "description": "Parazit modeli için güncelleme olup olmadığını kontrol et"
+            }
+          },
+          {
+            "name": "MNIST Modeli Güncelleme Kontrolü",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/models/mnist/mnist-convnet/1.0.0/check-update",
+                "host": ["{{base_url}}"],
+                "path": ["api", "models", "mnist", "mnist-convnet", "1.0.0", "check-update"]
+              },
+              "description": "MNIST modeli için güncelleme olup olmadığını kontrol et"
+            }
+          }
+        ]
+      },
+      {
+        "name": "7. Kullanıcı Yönetimi (Admin)",
+        "description": "Admin paneli için kullanıcı yönetimi işlemleri",
+        "item": [
+          {
+            "name": "Tüm Kullanıcıları Listele",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/users?page=1&limit=20&role=user&search=test&sortBy=createdAt&sortOrder=desc",
+                "host": ["{{base_url}}"],
+                "path": ["api", "users"],
+                "query": [
+                  {
+                    "key": "page",
+                    "value": "1"
+                  },
+                  {
+                    "key": "limit",
+                    "value": "20"
+                  },
+                  {
+                    "key": "role",
+                    "value": "user"
+                  },
+                  {
+                    "key": "search",
+                    "value": "test"
+                  },
+                  {
+                    "key": "sortBy",
+                    "value": "createdAt"
+                  },
+                  {
+                    "key": "sortOrder",
+                    "value": "desc"
+                  }
+                ]
+              },
+              "description": "Tüm kullanıcıları listele (filtreleme ve sayfalama ile)\n\n### Sorgu Parametreleri\n- `page` (number, opsiyonel): Sayfa numarası (varsayılan: 1)\n- `limit` (number, opsiyonel): Sayfa başına sonuç sayısı (varsayılan: 20, maksimum: 100)\n- `role` (string, opsiyonel): Rol filtresi (user, veterinarian, admin)\n- `search` (string, opsiyonel): İsim veya e-posta arama\n- `sortBy` (string, opsiyonel): Sıralama alanı (varsayılan: createdAt)\n- `sortOrder` (string, opsiyonel): Sıralama yönü (asc, desc - varsayılan: desc)\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"users\": [\n    {\n      \"_id\": \"64f8a1b2c3d4e5f6a7b8c9d0\",\n      \"name\": \"Test Kullanıcı\",\n      \"email\": \"test@example.com\",\n      \"role\": \"user\",\n      \"createdAt\": \"2023-09-07T10:30:00.000Z\",\n      \"updatedAt\": \"2023-09-07T10:30:00.000Z\"\n    }\n  ],\n  \"pagination\": {\n    \"currentPage\": 1,\n    \"totalPages\": 5,\n    \"totalCount\": 95,\n    \"hasNextPage\": true,\n    \"hasPrevPage\": false,\n    \"limit\": 20\n  },\n  \"filters\": {\n    \"role\": \"user\",\n    \"search\": \"test\",\n    \"sortBy\": \"createdAt\",\n    \"sortOrder\": \"desc\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**401 - Kimlik Doğrulama Gerekli**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu işlem için giriş yapmanız gerekiyor\"\n}\n```\n\n**403 - Yetki Yetersiz**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu işlem için yetkiniz bulunmamaktadır\"\n}\n```\n\n### Notlar\n- Sadece admin rolündeki kullanıcılar erişebilir\n- Kimlik doğrulama gerekli\n- Rate limit: 1 dakikada maksimum 60 istek"
+            }
+          },
+          {
+            "name": "Kullanıcı Detayı",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/users/64f8a1b2c3d4e5f6a7b8c9d0",
+                "host": ["{{base_url}}"],
+                "path": ["api", "users", "64f8a1b2c3d4e5f6a7b8c9d0"]
+              },
+              "description": "Belirli bir kullanıcının detaylarını getir\n\n### URL Parametreleri\n- `id` (string): Kullanıcı ID'si\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"user\": {\n    \"_id\": \"64f8a1b2c3d4e5f6a7b8c9d0\",\n    \"name\": \"Test Kullanıcı\",\n    \"email\": \"test@example.com\",\n    \"role\": \"user\",\n    \"createdAt\": \"2023-09-07T10:30:00.000Z\",\n    \"updatedAt\": \"2023-09-07T10:30:00.000Z\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**400 - Geçersiz ID Formatı**\n```json\n{\n  \"success\": false,\n  \"message\": \"Geçersiz kullanıcı ID formatı\"\n}\n```\n\n**404 - Kullanıcı Bulunamadı**\n```json\n{\n  \"success\": false,\n  \"message\": \"Kullanıcı bulunamadı\"\n}\n```\n\n### Notlar\n- Sadece admin rolündeki kullanıcılar erişebilir\n- Kimlik doğrulama gerekli\n- Rate limit: 1 dakikada maksimum 60 istek"
+            }
+          },
+          {
+            "name": "Kullanıcı Oluştur",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"name\": \"Yeni Kullanıcı\",\n    \"email\": \"yeni@example.com\",\n    \"password\": \"Test1234!\",\n    \"role\": \"user\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/users",
+                "host": ["{{base_url}}"],
+                "path": ["api", "users"]
+              },
+              "description": "Yeni kullanıcı oluştur\n\n### İstek Gövdesi\n- `name` (string, zorunlu): Kullanıcının adı ve soyadı\n- `email` (string, zorunlu): Geçerli e-posta adresi\n- `password` (string, zorunlu): En az 6 karakter\n- `role` (string, opsiyonel): Kullanıcı rolü (user, veterinarian, admin - varsayılan: user)\n\n### Başarılı Yanıt (201)\n```json\n{\n  \"success\": true,\n  \"message\": \"Kullanıcı başarıyla oluşturuldu\",\n  \"user\": {\n    \"_id\": \"64f8a1b2c3d4e5f6a7b8c9d1\",\n    \"name\": \"Yeni Kullanıcı\",\n    \"email\": \"yeni@example.com\",\n    \"role\": \"user\",\n    \"createdAt\": \"2023-09-07T12:00:00.000Z\",\n    \"updatedAt\": \"2023-09-07T12:00:00.000Z\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**400 - Validation Hatası**\n```json\n{\n  \"success\": false,\n  \"message\": \"İsim, e-posta ve şifre gereklidir\"\n}\n```\n\n**400 - E-posta Zaten Kullanımda**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu e-posta adresi zaten kullanılıyor\"\n}\n```\n\n### Notlar\n- Sadece admin rolündeki kullanıcılar erişebilir\n- Kimlik doğrulama gerekli\n- Rate limit: 1 dakikada maksimum 60 istek"
+            }
+          },
+          {
+            "name": "Kullanıcı Güncelle",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "PUT",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"name\": \"Güncellenmiş İsim\",\n    \"email\": \"guncellenmis@example.com\",\n    \"role\": \"veterinarian\",\n    \"password\": \"YeniSifre123!\"\n}"
+              },
+              "url": {
+                "raw": "{{base_url}}/api/users/64f8a1b2c3d4e5f6a7b8c9d0",
+                "host": ["{{base_url}}"],
+                "path": ["api", "users", "64f8a1b2c3d4e5f6a7b8c9d0"]
+              },
+              "description": "Mevcut kullanıcıyı güncelle\n\n### URL Parametreleri\n- `id` (string): Güncellenecek kullanıcı ID'si\n\n### İstek Gövdesi\nGüncellenecek alanlar (tümü opsiyonel):\n- `name` (string): Kullanıcının adı ve soyadı\n- `email` (string): E-posta adresi\n- `role` (string): Kullanıcı rolü (user, veterinarian, admin)\n- `password` (string): Yeni şifre (en az 6 karakter)\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"message\": \"Kullanıcı başarıyla güncellendi\",\n  \"user\": {\n    \"_id\": \"64f8a1b2c3d4e5f6a7b8c9d0\",\n    \"name\": \"Güncellenmiş İsim\",\n    \"email\": \"guncellenmis@example.com\",\n    \"role\": \"veterinarian\",\n    \"createdAt\": \"2023-09-07T10:30:00.000Z\",\n    \"updatedAt\": \"2023-09-07T14:30:00.000Z\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**404 - Kullanıcı Bulunamadı**\n```json\n{\n  \"success\": false,\n  \"message\": \"Kullanıcı bulunamadı\"\n}\n```\n\n**400 - E-posta Çakışması**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu e-posta adresi başka bir kullanıcı tarafından kullanılıyor\"\n}\n```\n\n### Notlar\n- Sadece admin rolündeki kullanıcılar erişebilir\n- Kimlik doğrulama gerekli\n- Rate limit: 1 dakikada maksimum 60 istek"
+            }
+          },
+          {
+            "name": "Kullanıcı Sil",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "DELETE",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/users/64f8a1b2c3d4e5f6a7b8c9d0",
+                "host": ["{{base_url}}"],
+                "path": ["api", "users", "64f8a1b2c3d4e5f6a7b8c9d0"]
+              },
+              "description": "Kullanıcıyı sil\n\n### URL Parametreleri\n- `id` (string): Silinecek kullanıcı ID'si\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"message\": \"Kullanıcı başarıyla silindi\"\n}\n```\n\n### Hata Yanıtları\n\n**400 - Kendi Hesabını Silme**\n```json\n{\n  \"success\": false,\n  \"message\": \"Kendi hesabınızı silemezsiniz\"\n}\n```\n\n**404 - Kullanıcı Bulunamadı**\n```json\n{\n  \"success\": false,\n  \"message\": \"Kullanıcı bulunamadı\"\n}\n```\n\n### Notlar\n- Sadece admin rolündeki kullanıcılar erişebilir\n- Admin kendi hesabını silemez\n- Kimlik doğrulama gerekli\n- Rate limit: 1 dakikada maksimum 60 istek"
+            }
+          },
+          {
+            "name": "Kullanıcı İstatistikleri",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/users/stats",
+                "host": ["{{base_url}}"],
+                "path": ["api", "users", "stats"]
+              },
+              "description": "Kullanıcı istatistikleri (Admin Dashboard için)\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"stats\": {\n    \"totalUsers\": 150,\n    \"recentUsers\": 12,\n    \"roleDistribution\": {\n      \"user\": 120,\n      \"veterinarian\": 25,\n      \"admin\": 5\n    },\n    \"monthlyRegistrations\": [\n      {\n        \"_id\": {\n          \"year\": 2023,\n          \"month\": 9\n        },\n        \"count\": 15\n      },\n      {\n        \"_id\": {\n          \"year\": 2023,\n          \"month\": 10\n        },\n        \"count\": 22\n      }\n    ]\n  }\n}\n```\n\n### Notlar\n- Sadece admin rolündeki kullanıcılar erişebilir\n- Kimlik doğrulama gerekli\n- Rate limit: 1 dakikada maksimum 60 istek\n- `recentUsers`: Son 30 günde kayıt olan kullanıcı sayısı\n- `monthlyRegistrations`: Son 12 ayın aylık kayıt istatistikleri"
+            }
+          }
+        ]
+      },
+      {
+        "name": "8. Admin Dashboard",
+        "description": "Admin paneli dashboard için analiz istatistikleri",
+        "item": [
+          {
+            "name": "Tüm Analizleri Listele",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/analysis/admin/all?page=1&limit=20&type=Parasite&userId=64f8a1b2c3d4e5f6a7b8c9d0&processedOnMobile=true&startDate=2023-09-01T00:00:00Z&endDate=2023-09-30T23:59:59Z&sortBy=createdAt&sortOrder=desc",
+                "host": ["{{base_url}}"],
+                "path": ["api", "analysis", "admin", "all"],
+                "query": [
+                  {
+                    "key": "page",
+                    "value": "1"
+                  },
+                  {
+                    "key": "limit",
+                    "value": "20"
+                  },
+                  {
+                    "key": "type",
+                    "value": "Parasite"
+                  },
+                  {
+                    "key": "userId",
+                    "value": "64f8a1b2c3d4e5f6a7b8c9d0"
+                  },
+                  {
+                    "key": "processedOnMobile",
+                    "value": "true"
+                  },
+                  {
+                    "key": "startDate",
+                    "value": "2023-09-01T00:00:00Z"
+                  },
+                  {
+                    "key": "endDate",
+                    "value": "2023-09-30T23:59:59Z"
+                  },
+                  {
+                    "key": "sortBy",
+                    "value": "createdAt"
+                  },
+                  {
+                    "key": "sortOrder",
+                    "value": "desc"
+                  }
+                ]
+              },
+              "description": "Tüm analizleri listele (Admin Dashboard için)\n\n### Sorgu Parametreleri\n- `page` (number, opsiyonel): Sayfa numarası (varsayılan: 1)\n- `limit` (number, opsiyonel): Sayfa başına sonuç sayısı (varsayılan: 20, maksimum: 100)\n- `type` (string, opsiyonel): Analiz tipi filtresi (Parasite, MNIST)\n- `userId` (string, opsiyonel): Kullanıcı ID filtresi\n- `processedOnMobile` (boolean, opsiyonel): Mobil cihazda işlenmiş analizler (true/false)\n- `startDate` (string, opsiyonel): Başlangıç tarihi (ISO 8601 formatı)\n- `endDate` (string, opsiyonel): Bitiş tarihi (ISO 8601 formatı)\n- `sortBy` (string, opsiyonel): Sıralama alanı (createdAt, updatedAt, analysisType, processingTimeMs)\n- `sortOrder` (string, opsiyonel): Sıralama yönü (asc, desc - varsayılan: desc)\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"analyses\": [\n    {\n      \"_id\": \"64f8a1b2c3d4e5f6a7b8c9f1\",\n      \"analysisType\": \"Parasite\",\n      \"imageUrl\": \"https://opca-bucket.s3.amazonaws.com/analyses/original_1694096400123_parasite.jpg\",\n      \"thumbnailUrl\": \"https://opca-bucket.s3.amazonaws.com/analyses/thumb_1694096400123_parasite.jpg\",\n      \"location\": \"Ankara, Türkiye\",\n      \"notes\": \"Cihazda işlenmiş parazit analizi\",\n      \"parasiteResults\": [\n        {\n          \"type\": \"Neosporosis\",\n          \"confidence\": 0.75\n        }\n      ],\n      \"digitResults\": [],\n      \"processingTimeMs\": 350,\n      \"processedOnMobile\": true,\n      \"modelName\": \"parasite-mobilenet\",\n      \"modelVersion\": \"1.0.0\",\n      \"deviceInfo\": \"Android 13 / Samsung Galaxy S22\",\n      \"user\": {\n        \"_id\": \"64f8a1b2c3d4e5f6a7b8c9d0\",\n        \"name\": \"Test Kullanıcı\",\n        \"email\": \"test@example.com\",\n        \"role\": \"user\"\n      },\n      \"createdAt\": \"2023-09-07T12:00:00.123Z\",\n      \"updatedAt\": \"2023-09-07T12:00:00.123Z\"\n    }\n  ],\n  \"pagination\": {\n    \"currentPage\": 1,\n    \"totalPages\": 10,\n    \"totalCount\": 195,\n    \"hasNextPage\": true,\n    \"hasPrevPage\": false,\n    \"limit\": 20\n  },\n  \"filters\": {\n    \"type\": \"Parasite\",\n    \"userId\": \"64f8a1b2c3d4e5f6a7b8c9d0\",\n    \"processedOnMobile\": true,\n    \"startDate\": \"2023-09-01T00:00:00.000Z\",\n    \"endDate\": \"2023-09-30T23:59:59.000Z\",\n    \"sortBy\": \"createdAt\",\n    \"sortOrder\": \"desc\"\n  }\n}\n```\n\n### Hata Yanıtları\n\n**401 - Kimlik Doğrulama Gerekli**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu işlem için giriş yapmanız gerekiyor\"\n}\n```\n\n**403 - Yetki Yetersiz**\n```json\n{\n  \"success\": false,\n  \"message\": \"Bu işlem için yetkiniz bulunmamaktadır\"\n}\n```\n\n### Notlar\n- Sadece admin rolündeki kullanıcılar erişebilir\n- Kimlik doğrulama gerekli\n- Bu endpoint önbellekleme kullanır (2 dakika)\n- Rate limit: 1 dakikada maksimum 60 istek\n- Kullanıcı bilgileri ile birlikte döner"
+            }
+          },
+          {
+            "name": "Analiz İstatistikleri",
+            "request": {
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{access_token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "method": "GET",
+              "header": [],
+              "url": {
+                "raw": "{{base_url}}/api/analysis/admin/stats",
+                "host": ["{{base_url}}"],
+                "path": ["api", "analysis", "admin", "stats"]
+              },
+              "description": "Analiz istatistikleri (Admin Dashboard için)\n\n### Başarılı Yanıt (200)\n```json\n{\n  \"success\": true,\n  \"stats\": {\n    \"totalAnalyses\": 1250,\n    \"recentAnalyses\": 85,\n    \"typeDistribution\": {\n      \"Parasite\": 750,\n      \"MNIST\": 500\n    },\n    \"processingDistribution\": {\n      \"mobile\": 800,\n      \"server\": 450\n    },\n    \"dailyAnalyses\": [\n      {\n        \"_id\": {\n          \"year\": 2023,\n          \"month\": 9,\n          \"day\": 15\n        },\n        \"count\": 25,\n        \"parasiteCount\": 15,\n        \"mnistCount\": 10\n      }\n    ],\n    \"topUsers\": [\n      {\n        \"_id\": \"64f8a1b2c3d4e5f6a7b8c9d0\",\n        \"analysisCount\": 45,\n        \"userName\": \"Test Kullanıcı\",\n        \"userEmail\": \"test@example.com\",\n        \"userRole\": \"user\"\n      }\n    ],\n    \"avgProcessingTimes\": {\n      \"Parasite\": {\n        \"average\": 320,\n        \"minimum\": 150,\n        \"maximum\": 800\n      },\n      \"MNIST\": {\n        \"average\": 180,\n        \"minimum\": 80,\n        \"maximum\": 350\n      }\n    }\n  }\n}\n```\n\n### Notlar\n- Sadece admin rolündeki kullanıcılar erişebilir\n- Kimlik doğrulama gerekli\n- Bu endpoint önbellekleme kullanır (5 dakika)\n- Rate limit: 1 dakikada maksimum 60 istek\n- `recentAnalyses`: Son 30 günde yapılan analiz sayısı\n- `dailyAnalyses`: Son 30 günün günlük analiz istatistikleri\n- `topUsers`: Son 30 günde en aktif 10 kullanıcı\n- `avgProcessingTimes`: Analiz tipine göre ortalama işleme süreleri (ms)"
+            }
+          }
+        ]
+      }
+    ],
+    "event": [
+      {
+        "listen": "prerequest",
+        "script": {
+          "type": "text/javascript",
+          "exec": [""]
+        }
+      },
+      {
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [""]
+        }
+      }
+    ],
+    "variable": [
+      {
+        "key": "base_url",
+        "value": "http://localhost:5002",
+        "type": "string"
+      }
+    ]
+  }
